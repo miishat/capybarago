@@ -63,16 +63,17 @@ const EggCalculator: React.FC = () => {
     const [calculationMode, setCalculationMode] = useState<CalculationMode>('minEggs'); // State for calculation mode
 
 
-    // Game constants  -- Keeping these.
-    const EGGS_PER_STAGE: Record<number, number> = { 1: 500, 2: 500, 3: 1000, 4: 1000, 5: 1000 };
-    const STAGE_REWARDS: Record<number, { hammers: number; eggs: number; gems: number }> = {
+    // Game constants (wrapped in useMemo)
+    type StageKey = 1 | 2 | 3 | 4 | 5;
+    const EGGS_PER_STAGE = useMemo(() => ({ 1: 500, 2: 500, 3: 1000, 4: 1000, 5: 1000 } as Record<StageKey, number>), []);
+    const STAGE_REWARDS = useMemo(() => ({
         1: { hammers: 100, eggs: 30, gems: 100 },
         2: { hammers: 100, eggs: 60, gems: 100 },
         3: { hammers: 100, eggs: 90, gems: 100 },
         4: { hammers: 100, eggs: 120, gems: 100 },
         5: { hammers: 100, eggs: 200, gems: 100 },
-    };
-    const ROUND_REWARDS = { tickets: 2, hammers: 3000, gems: 1000 }; // No eggs in round rewards
+    } as { [key: number]: { hammers: number; eggs: number; gems: number } }), []);
+    const ROUND_REWARDS = useMemo(() => ({ tickets: 2, hammers: 3000, gems: 1000 }), []);
 
     /** Handles checkbox change. */
     const handleCheckboxChange = (checked: CheckedState) => {
@@ -234,9 +235,9 @@ const EggCalculator: React.FC = () => {
                 currentRoundPointsLocal += eggsOpened;
                 finalTotalPoints += eggsOpened;
 
-                while (currentRoundPointsLocal >= EGGS_PER_STAGE[stage] && eggsOpened > 0 && !isRound4Complete) {
-                    const pointsToCompleteStage = EGGS_PER_STAGE[stage] - (currentRoundPointsLocal - eggsOpened);
-                    currentRoundPointsLocal -= EGGS_PER_STAGE[stage];
+                while (currentRoundPointsLocal >= EGGS_PER_STAGE[stage as StageKey] && eggsOpened > 0 && !isRound4Complete) {
+                    const pointsToCompleteStage = EGGS_PER_STAGE[stage as StageKey] - (currentRoundPointsLocal - eggsOpened);
+                    currentRoundPointsLocal -= EGGS_PER_STAGE[stage as StageKey];
                     eggsOpened -= pointsToCompleteStage;
 
                     if (round <= 4) {
@@ -294,11 +295,9 @@ const EggCalculator: React.FC = () => {
 
         const targetTotalPointsNum = parseInt(targetTotalPoints);
         if(isNaN(targetTotalPointsNum)) return null;
-      
+
         let currentTotalPointsNum = parseInt(totalPoints || '0')
         if(isNaN(currentTotalPointsNum)) currentTotalPointsNum = 0;
-
-        const remainingPoints = Math.max(0, targetTotalPointsNum - currentTotalPointsNum);
 
         // Initial values for simulation
         let availableEggs = 0; // Starting with 0 available eggs
@@ -314,16 +313,16 @@ const EggCalculator: React.FC = () => {
             if (availableEggs < 30) {
               availableEggs += 30; // Buy a batch of eggs
             }
-            
+
             availableEggs -= 30;  // Open 35
             let eggsOpened = 35;
             currentRoundPointsLocal += eggsOpened; // Increase round points
             totalPointsLocal += eggsOpened;
 
               // Handle stage and round completions
-            while(currentRoundPointsLocal >= EGGS_PER_STAGE[stage] && eggsOpened > 0 && !isRound4Complete){
-                const pointsToCompleteStage = EGGS_PER_STAGE[stage] - (currentRoundPointsLocal - eggsOpened);
-                currentRoundPointsLocal -= EGGS_PER_STAGE[stage];
+            while(currentRoundPointsLocal >= EGGS_PER_STAGE[stage as StageKey] && eggsOpened > 0 && !isRound4Complete){
+                const pointsToCompleteStage = EGGS_PER_STAGE[stage as StageKey] - (currentRoundPointsLocal - eggsOpened);
+                currentRoundPointsLocal -= EGGS_PER_STAGE[stage as StageKey];
                 eggsOpened -= pointsToCompleteStage;
 
 
