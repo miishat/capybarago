@@ -27,7 +27,7 @@ interface EventProgressResult {
     finalRound: number;
     finalStage: number;
     finalPoints: number;
-    totalPoints: number;
+    finalTotalPoints: number; // Changed name to finalTotalPoints
     rewards: {
         hammers: number;
         eggs: number;
@@ -71,7 +71,7 @@ const EggCalculator: React.FC = () => {
     const [calculationMode, setCalculationMode] = useState<CalculationMode>('minEggs'); // State for calculation mode
 
 
-    // Game constants
+    // Game constants  -- Keeping these.
     const EGGS_PER_STAGE: Record<number, number> = { 1: 500, 2: 500, 3: 1000, 4: 1000, 5: 1000 };
     const STAGE_REWARDS: Record<number, { hammers: number; eggs: number; gems: number }> = {
         1: { hammers: 100, eggs: 30, gems: 100 },
@@ -98,11 +98,12 @@ const EggCalculator: React.FC = () => {
 
     /** Handles change on total points input */
     const handleTotalPointsChange = (e: ChangeEvent<HTMLInputElement>) => {
-        setTotalPoints(e.target.value);
-        validateInput(e.target.value, 'totalPoints');
+        const value = e.target.value;
+        // Allow empty value without defaulting to '0'
+        setTotalPoints(value);
+        validateInput(value, 'totalPoints');
         setShowResults(true);
-         // Clear manual round/stage/points if Total Points is entered
-         if (e.target.value) {
+        if (value) {
             setCurrentRound('');
             setCurrentStage('');
             setCurrentRoundPoints('');
@@ -142,35 +143,61 @@ const EggCalculator: React.FC = () => {
         setCalculationMode('minEggs') //Also reset calculation mode
     };
 
-    /** Calculates the number of 35-egg batches. */
-    const calculate35Batches = useMemo(() => (eggs: string) => {
-        if (!eggs) return null;
-        const numEggs = parseInt(eggs);
+    const nonEventCalculator = useMemo(() => {
+        const numEggs = parseInt(availableEggs);
         if (isNaN(numEggs) || numEggs < 0) return null;
-        const numBatches = Math.floor(numEggs / 30);
-        return { batches: numBatches, eggsOpened: numBatches * 35, eggsUsed: numBatches * 30, eggsRemaining: numEggs - numBatches * 30 };
-    }, []);
 
-    /** Calculates rewards for a stage/round. */
-    const calculateStageRewards = (stage: number, round: number): Rewards => {
-        if (round > 4) return { hammers: 0, eggs: 0, gems: 0, tickets: 0 };
-        return { hammers: STAGE_REWARDS[stage].hammers, eggs: STAGE_REWARDS[stage].eggs, gems: STAGE_REWARDS[stage].gems, tickets: 0 };
-    };
+        const batches = Math.floor(numEggs / 30);
+        const eggsOpened = batches * 35;
+        const eggsRemaining = numEggs - (batches * 30);
 
-     const calculateEventProgress = useMemo(() => {
+        return (
+            <div className="bg-blue-50 p-4 rounded-lg shadow-sm">
+                <h3 className="text-lg font-semibold text-slate-700 mb-2 text-center">Maximum Egg Openings</h3>
+                <div className="grid grid-cols-3 gap-4">
+                    <ResultItem label="Total Eggs to Open" value={eggsOpened} />
+                    <ResultItem label="Remaining Eggs" value={eggsRemaining} />
+                    <ResultItem label="Batches (35 Eggs)" value={batches} />
+                </div>
+            </div>
+        );
+    }, [availableEggs]);
+
+    const specificEggsCalculator = useMemo(() => {
+        const numTargetEggs = parseInt(targetEggs);
+        if (isNaN(numTargetEggs) || numTargetEggs < 0) return null;
+
+        const totalBatches = Math.ceil(numTargetEggs / 35);
+        const eggsNeeded = totalBatches * 30;
+        const extraEggs = (totalBatches * 35) - numTargetEggs;
+
+        return (
+            <div className="bg-blue-50 p-4 rounded-lg shadow-sm">
+                <h3 className="text-lg font-semibold text-slate-700 mb-2 text-center">Specific Number of Eggs</h3>
+                <div className="grid grid-cols-3 gap-4">
+                    <ResultItem label="Total Batches" value={totalBatches} />
+                    <ResultItem label="Total Eggs Needed" value={eggsNeeded} />
+                    <ResultItem label="Extra Eggs" value={extraEggs} />
+                </div>
+            </div>
+        );
+    }, [targetEggs]);
+
+    // --- Event mode calculations ---
+    const calculateEventProgress = useMemo(() => {
         return (availableEggs?: string): EventProgressResult | null => {
             if (!availableEggs) return null;
             let availableEggsNum = parseInt(availableEggs);
             if (isNaN(availableEggsNum) || availableEggsNum < 0) return null;
 
-            let currentRoundPointsNum = parseInt(currentRoundPoints || '0'); // Default to 0
+            let currentRoundPointsNum = parseInt(currentRoundPoints || '0');
             if (isNaN(currentRoundPointsNum) || currentRoundPointsNum < 0) return null;
 
             let totalPointsNum = parseInt(totalPoints || '0');
             if (isNaN(totalPointsNum)) return null;
 
-            let round = parseInt(currentRound || '1'); //Default 1
-            let stage = parseInt(currentStage || '1'); //Default 1
+            let round = parseInt(currentRound || '1');
+            let stage = parseInt(currentStage || '1');
 
             let totalRewards = { hammers: 0, eggs: 0, gems: 0, tickets: 0 };
 
@@ -185,31 +212,33 @@ const EggCalculator: React.FC = () => {
                     totalRewards.gems += STAGE_REWARDS[s].gems;
                 }
             }
+            
             for (let s = 1; s < stage; s++) {
-                const stageRewards = calculateStageRewards(s, round);
+                const stageRewards = STAGE_REWARDS[s];
                 totalRewards.hammers += stageRewards.hammers;
                 totalRewards.eggs += stageRewards.eggs;
                 totalRewards.gems += stageRewards.gems;
             }
 
-            //Add the already won eggs to the available eggs.
+            // Add the already won eggs to the available eggs
             availableEggsNum += totalRewards.eggs;
 
             let currentRoundPointsLocal = currentRoundPointsNum;
+            let finalTotalPoints = totalPointsNum;
 
-            while (availableEggsNum >= 30) { // Check for enough eggs for a batch
+            while (availableEggsNum >= 30) {
                 availableEggsNum -= 30; // Cost of opening 35 eggs
                 let eggsOpened = 35;
 
                 currentRoundPointsLocal += eggsOpened;
-                totalPointsNum += eggsOpened;
+                finalTotalPoints += eggsOpened;
 
                 while (currentRoundPointsLocal >= EGGS_PER_STAGE[stage] && eggsOpened > 0) {
                     const pointsToCompleteStage = EGGS_PER_STAGE[stage] - (currentRoundPointsLocal - eggsOpened);
                     currentRoundPointsLocal -= EGGS_PER_STAGE[stage];
-                    eggsOpened -= pointsToCompleteStage
+                    eggsOpened -= pointsToCompleteStage;
 
-                    const stageRewards = calculateStageRewards(stage, round);
+                    const stageRewards = STAGE_REWARDS[stage];
                     totalRewards.hammers += stageRewards.hammers;
                     totalRewards.eggs += stageRewards.eggs;
                     totalRewards.gems += stageRewards.gems;
@@ -227,205 +256,81 @@ const EggCalculator: React.FC = () => {
 
                         if (round > 4) {
                             currentRoundPointsLocal += eggsOpened;
-                            eggsOpened = 0
+                            eggsOpened = 0;
                         }
-
                     } else {
                         stage++;
                     }
                 }
             }
+
+            // Apply maximum value constraints and handle points > 15999
+            if (finalTotalPoints >= 16000) {
+                round = 4;
+                stage = 5;
+                currentRoundPointsLocal = 4000;
+            } else {
+                round = Math.min(round, 4);
+                stage = Math.min(stage, 5);
+                currentRoundPointsLocal = Math.min(currentRoundPointsLocal, 4000);
+            }
+
             return {
                 finalRound: round,
                 finalStage: stage,
                 finalPoints: currentRoundPointsLocal,
-                totalPoints: totalPointsNum,
-                rewards: totalRewards,
+                finalTotalPoints: finalTotalPoints,
+                rewards: totalRewards
             };
         };
-    }, [currentRound, currentStage, currentRoundPoints, totalPoints, calculateStageRewards, EGGS_PER_STAGE, ROUND_REWARDS, STAGE_REWARDS]);
+    }, [currentRound, currentStage, currentRoundPoints, totalPoints]);
 
-
-
-  const calculateEggsNeeded = useMemo(() => {
-        return (): number | null => {
-            if (!targetTotalPoints) return null;
-
-            let targetTotalPointsNum = parseInt(targetTotalPoints);
-            if (isNaN(targetTotalPointsNum) || targetTotalPointsNum < 0) return null;
-
-            let currentRoundPointsNum = parseInt(currentRoundPoints || '0');
-            if (isNaN(currentRoundPointsNum) || currentRoundPointsNum < 0) return null;
-
-            let totalPointsNum = parseInt(totalPoints || '0');
-            if (isNaN(totalPointsNum)) return null;
-
-            if (targetTotalPointsNum <= totalPointsNum) {
-                return 0; // Already reached the target
-            }
-
-            let remainingPoints = targetTotalPointsNum - totalPointsNum;
-            let eggsNeeded = 0;
-            let round = parseInt(currentRound  || '1');
-            let stage = parseInt(currentStage || '1');
-            let currentRoundPointsLocal = currentRoundPointsNum;
-            let availableEggs = 0;
-
-            // Add rewards from already completed stages and rounds
-            for (let r = 1; r < round; r++) {
-                for (let s = 1; s <= 5; s++) {
-                    availableEggs += STAGE_REWARDS[s].eggs;
-                }
-            }
-            for (let s = 1; s < stage; s++) {
-                availableEggs += STAGE_REWARDS[s].eggs;
-            }
-            availableEggs = Math.ceil(availableEggs / 30) * 35
-            currentRoundPointsLocal += availableEggs;
-            remainingPoints -= availableEggs
-            let completedRound4 = false;
-
-            // Consider reward eggs only if current total points are less than 16000
-            if (totalPointsNum < 16000) {
-                while (remainingPoints > 0 && round <= 4) {
-                    const requiredForStage = EGGS_PER_STAGE[stage];
-                    let pointsNeededForStage = requiredForStage - (currentRoundPointsLocal % requiredForStage);
-
-                    if (pointsNeededForStage <= 0) {
-                        if (stage === 5) {
-                            round++;
-                            stage = 1;
-                            if(round > 4){
-                                completedRound4 = true;
-                                break;
-                            }
-                        } else {
-                            stage++;
-                        }
-                        continue; // Go to the next stage/round
-                    }
-
-                    // Calculate batches, WITHOUT considering available eggs (they are already added)
-                    let batchesNeeded = Math.ceil(pointsNeededForStage / 35);
-                    let eggsToUse = batchesNeeded * 30;
-                    let pointsGained = batchesNeeded * 35;
-
-                    eggsNeeded += eggsToUse;
-                    remainingPoints -= pointsGained;
-                    currentRoundPointsLocal += pointsGained; // Accumulate points
-
-                    // Add reward points *IMMEDIATELY*
-                    let rewardEggs = STAGE_REWARDS[stage].eggs;
-                    let rewardPoints = Math.ceil(rewardEggs / 30) * 35; // Calculate reward points
-                    currentRoundPointsLocal += rewardPoints; // Add them to current round points
-
-                    remainingPoints -= rewardPoints;
-
-                    if (stage === 5) {
-                        round++;
-                        stage = 1;
-                          if(round > 4){
-                            completedRound4 = true;
-                            availableEggs = rewardEggs; //Keep the eggs available
-                            break;
-                        }
-                    } else {
-                        stage++;
-                    }
-                }
-            }
-
-
-            // Simplified post-round 4 calculation
-            if (completedRound4) {
-                eggsNeeded += Math.max(0, Math.ceil(remainingPoints / 35) * 30 - availableEggs);
-            }
-            else if(remainingPoints > 0){
-                eggsNeeded += Math.ceil(remainingPoints/35)*30
-            }
-
-              let currentTotalPoints = parseInt(totalPoints || '0')
-              let potentialPoints = Math.floor(eggsNeeded/30)*35;
-              currentTotalPoints += potentialPoints
-
-            let extra = 0;
-            if(currentTotalPoints > targetTotalPointsNum){
-              extra = currentTotalPoints - targetTotalPointsNum;
-              extra = Math.ceil(extra/35)*30
-            }
-
-            return Math.max(0, eggsNeeded - extra);
-        };
-    }, [targetTotalPoints, currentRound, currentStage, currentRoundPoints, totalPoints, EGGS_PER_STAGE, STAGE_REWARDS]);
-
-
-
-    // --- Non-event mode calculations ---
-const nonEventCalculator = useMemo(() => {
-  const numEggs = parseInt(availableEggs);
-  if (isNaN(numEggs) || numEggs <= 0) return null;
-  const result = calculate35Batches(availableEggs); // Use existing helper
-  if (!result) return null;
-
-  return (
-    <div className="bg-blue-50 p-4 rounded-lg shadow-sm">
-      <h3 className="text-lg font-semibold text-slate-700 mb-2 text-center">Maximum Egg Openings</h3>
-      <div className="grid grid-cols-3 gap-4">
-        <ResultItem label="Total Eggs to Open" value={result.eggsOpened} />
-        <ResultItem label="Remaining Eggs" value={result.eggsRemaining} />
-        <ResultItem label="Batches (35 Eggs)" value={result.batches} />
-      </div>
-    </div>
-  );
-}, [availableEggs, calculate35Batches]); // Correct dependencies
-
-const specificEggsCalculator = useMemo(() => {
-    const numTargetEggs = parseInt(targetEggs);
-    if (isNaN(numTargetEggs) || numTargetEggs <= 0) return null;
-
-    const numBatches = Math.ceil(numTargetEggs / 35); // Corrected: Divide by 35 for batches
-    const eggsNeeded = numBatches * 30; // Corrected: Total eggs needed
-    const extraEggs = (numBatches * 35) - numTargetEggs;
-
-    return (
-        <div className="bg-blue-50 p-4 rounded-lg shadow-sm">
-            <h3 className="text-lg font-semibold text-slate-700 mb-2 text-center">Specific Number of Eggs</h3>
-            <div className="grid grid-cols-3 gap-4">
-                <ResultItem label="Total Batches" value={numBatches} />
-                <ResultItem label="Total Eggs Needed" value={eggsNeeded} />
-                {extraEggs > 0 && <ResultItem label="Extra Eggs" value={extraEggs} />}
-            </div>
-        </div>
-    );
-}, [targetEggs]);
-
-    // Automatic updates based on totalPoints.
-    const { autoRound, autoStage, autoRoundPoints } = useMemo(() => {
-      const totalPointsNum = parseInt(totalPoints || '0');
+    // Auto-update effects for total points
+    useEffect(() => {
+        const totalPointsNum = parseInt(totalPoints || '0');
         if (isNaN(totalPointsNum) || totalPointsNum < 0) {
-          return { autoRound: '', autoStage: '', autoRoundPoints: ''};
+            setCurrentRound('');
+            setCurrentStage('');
+            setCurrentRoundPoints('');
+            return;
         }
 
-        const autoRound = Math.floor(totalPointsNum / 4000) + 1;
-        const autoRoundPoints = totalPointsNum % 4000;
+        let autoRound = 1;
+        let autoRoundPoints = 0;
         let autoStage = 1;
-        if(autoRoundPoints >= 3000) autoStage = 5;
-        else if (autoRoundPoints >= 2000) autoStage = 4;
-        else if (autoRoundPoints >= 1000) autoStage = 3;
-        else if (autoRoundPoints >= 500) autoStage = 2;
 
-        return { autoRound: autoRound.toString(), autoStage: autoStage.toString(), autoRoundPoints: autoRoundPoints.toString() };
+        if (totalPointsNum < 16000) {
+            autoRound = Math.floor(totalPointsNum / 4000) + 1;
+            autoRoundPoints = totalPointsNum % 4000;
+            if (autoRoundPoints >= 3000) autoStage = 5;
+            else if (autoRoundPoints >= 2000) autoStage = 4;
+            else if (autoRoundPoints >= 1000) autoStage = 3;
+            else if (autoRoundPoints >= 500) autoStage = 2;
+        } else {
+            autoRound = 4;
+            autoStage = 5;
+            autoRoundPoints = 4000;
+        }
+
+        if (!totalPoints) return;
+
+        setCurrentRound(autoRound.toString());
+        setCurrentStage(autoStage.toString());
+        setCurrentRoundPoints(autoRoundPoints.toString());
     }, [totalPoints]);
 
+    // Auto-update effect for round, stage, points to total points
+    useEffect(() => {
+        const roundNum = parseInt(currentRound);
+        const stageNum = parseInt(currentStage);
+        const roundPointsNum = parseInt(currentRoundPoints);
+        if (!totalPoints && !isNaN(roundNum) && !isNaN(stageNum) && !isNaN(roundPointsNum)) {
+            const calculatedTotalPoints = Math.min((roundNum - 1) * 4000 + roundPointsNum, 16000);
+            setTotalPoints(calculatedTotalPoints.toString());
+        }
+}, [currentRound, currentStage, currentRoundPoints, totalPoints]);
 
-  // Update the state only if the values are not empty strings (controlled by Total Points input)
-  useEffect(() => {
-    if (autoRound) setCurrentRound(autoRound);
-    if (autoStage) setCurrentStage(autoStage);
-    if (autoRoundPoints) setCurrentRoundPoints(autoRoundPoints);
-  }, [autoRound, autoStage, autoRoundPoints]);
-
-    return (
+return (
         <>
             <ToastContainer
                 position="top-right"
@@ -574,28 +479,11 @@ const specificEggsCalculator = useMemo(() => {
                                               <div className="bg-blue-50 p-4 rounded-lg shadow-sm">
                                                   <h3 className="text-lg font-semibold text-slate-700 mb-2 text-center">Minimum Eggs Required</h3>
                                                   <div className="grid grid-cols-2 gap-4">
-                                                      <ResultItem label="Eggs Needed" value={calculateEggsNeeded() ?? 'Calculating...'} />
+                                                      {/*  Placeholder: ResultItem will be updated later */}
+                                                      <ResultItem label="Eggs Needed" value={'Calculating...'} /> 
                                                   </div>
                                               </div>
-                                              {/* Calculate and display rewards */}
-                                              {calculateEggsNeeded() !== null && (() => {
-                                                //We create temporal variables to call calculateEventProgress
-                                                  const eggs = calculateEggsNeeded()!.toString();
-                                                  const tempTotalPoints = (parseInt(totalPoints) + Math.floor(parseInt(eggs)/30)*35).toString()
-                                                  const progress =  calculateEventProgress(eggs)
-
-                                                  return progress ? (
-                                                      <div className="bg-blue-50 p-4 rounded-lg shadow-sm">
-                                                          <h3 className="text-lg font-semibold text-slate-700 mb-2 text-center">Total Rewards</h3>
-                                                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                                                              <ResultItem label="Hammers" value={progress.rewards.hammers} />
-                                                              <ResultItem label="Eggs" value={progress.rewards.eggs} />
-                                                              <ResultItem label="Gems" value={progress.rewards.gems} />
-                                                              <ResultItem label="Tickets" value={progress.rewards.tickets} />
-                                                          </div>
-                                                      </div>
-                                                  ) : null;
-                                              })()}
+                                               {/* Placeholder for rewards, will be implemented later */}
                                           </>
                                       )}
 
@@ -610,22 +498,14 @@ const specificEggsCalculator = useMemo(() => {
                                                     <h3 className="text-lg font-semibold text-slate-700 mb-2 text-center">
                                                       Event Progress (with {availableEggs} eggs)
                                                     </h3>
-                                                    <div className="grid grid-cols-2 gap-4">
+                                                  <div className="grid grid-cols-2 gap-4">
                                                       <ResultItem label="Final Round" value={progress.finalRound} />
                                                       <ResultItem label="Final Stage" value={progress.finalStage} />
                                                       <ResultItem label="Round Points" value={progress.finalPoints} />
-                                                      <ResultItem label="Total Points" value={progress.totalPoints} />
+                                                      <ResultItem label="Final Total Points" value={progress.finalTotalPoints} /> {/* Renamed */}
                                                     </div>
                                                   </div>
-                                                  <div className="bg-blue-50 p-4 rounded-lg shadow-sm">
-                                                    <h3 className="text-lg font-semibold text-slate-700 mb-2 text-center">Total Rewards</h3>
-                                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                                                      <ResultItem label="Hammers" value={progress.rewards.hammers} />
-                                                      <ResultItem label="Eggs" value={progress.rewards.eggs} />
-                                                      <ResultItem label="Gems" value={progress.rewards.gems} />
-                                                      <ResultItem label="Tickets" value={progress.rewards.tickets} />
-                                                    </div>
-                                                  </div>
+                                                  {/*Placeholder for total rewards*/}
                                                 </>
                                               ) : null;
                                             })()
