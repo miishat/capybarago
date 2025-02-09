@@ -99,7 +99,6 @@ const EggCalculator: React.FC = () => {
     /** Handles change on total points input */
     const handleTotalPointsChange = (e: ChangeEvent<HTMLInputElement>) => {
         const value = e.target.value;
-        // Allow empty value without defaulting to '0'
         setTotalPoints(value);
         validateInput(value, 'totalPoints');
         setShowResults(true);
