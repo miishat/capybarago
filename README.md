@@ -1,0 +1,2 @@
+# capybarago
+Capybara go tools
