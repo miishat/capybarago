@@ -19,7 +19,7 @@ interface EventProgressResult {
     finalRound: number;
     finalStage: number;
     finalPoints: number;
-    finalTotalPoints: number; // Changed name to finalTotalPoints
+    finalTotalPoints: number;
     rewards: {
         hammers: number;
         eggs: number;
