@@ -200,24 +200,29 @@ const EggCalculator: React.FC = () => {
             let stage = parseInt(currentStage || '1');
 
             let totalRewards = { hammers: 0, eggs: 0, gems: 0, tickets: 0 };
+            let isRound4Complete = false;
 
             // Add rewards from already completed stages and rounds
             for (let r = 1; r < round; r++) {
-                totalRewards.hammers += ROUND_REWARDS.hammers;
-                totalRewards.gems += ROUND_REWARDS.gems;
-                totalRewards.tickets += ROUND_REWARDS.tickets;
-                for (let s = 1; s <= 5; s++) {
-                    totalRewards.eggs += STAGE_REWARDS[s].eggs;
-                    totalRewards.hammers += STAGE_REWARDS[s].hammers;
-                    totalRewards.gems += STAGE_REWARDS[s].gems;
+                if (r <= 4) {
+                    totalRewards.hammers += ROUND_REWARDS.hammers;
+                    totalRewards.gems += ROUND_REWARDS.gems;
+                    totalRewards.tickets += ROUND_REWARDS.tickets;
+                    for (let s = 1; s <= 5; s++) {
+                        totalRewards.eggs += STAGE_REWARDS[s].eggs;
+                        totalRewards.hammers += STAGE_REWARDS[s].hammers;
+                        totalRewards.gems += STAGE_REWARDS[s].gems;
+                    }
                 }
             }
             
-            for (let s = 1; s < stage; s++) {
-                const stageRewards = STAGE_REWARDS[s];
-                totalRewards.hammers += stageRewards.hammers;
-                totalRewards.eggs += stageRewards.eggs;
-                totalRewards.gems += stageRewards.gems;
+            if (round <= 4) {
+                for (let s = 1; s < stage; s++) {
+                    const stageRewards = STAGE_REWARDS[s];
+                    totalRewards.hammers += stageRewards.hammers;
+                    totalRewards.eggs += stageRewards.eggs;
+                    totalRewards.gems += stageRewards.gems;
+                }
             }
 
             // Add the already won eggs to the available eggs
@@ -233,16 +238,18 @@ const EggCalculator: React.FC = () => {
                 currentRoundPointsLocal += eggsOpened;
                 finalTotalPoints += eggsOpened;
 
-                while (currentRoundPointsLocal >= EGGS_PER_STAGE[stage] && eggsOpened > 0) {
+                while (currentRoundPointsLocal >= EGGS_PER_STAGE[stage] && eggsOpened > 0 && !isRound4Complete) {
                     const pointsToCompleteStage = EGGS_PER_STAGE[stage] - (currentRoundPointsLocal - eggsOpened);
                     currentRoundPointsLocal -= EGGS_PER_STAGE[stage];
                     eggsOpened -= pointsToCompleteStage;
 
-                    const stageRewards = STAGE_REWARDS[stage];
-                    totalRewards.hammers += stageRewards.hammers;
-                    totalRewards.eggs += stageRewards.eggs;
-                    totalRewards.gems += stageRewards.gems;
-                    availableEggsNum += stageRewards.eggs; // Add reward eggs
+                    if (round <= 4) {
+                        const stageRewards = STAGE_REWARDS[stage];
+                        totalRewards.hammers += stageRewards.hammers;
+                        totalRewards.eggs += stageRewards.eggs;
+                        totalRewards.gems += stageRewards.gems;
+                        availableEggsNum += stageRewards.eggs; // Add reward eggs
+                    }
 
                     if (stage === 5) {
                         // Round completion
@@ -250,11 +257,10 @@ const EggCalculator: React.FC = () => {
                             totalRewards.tickets += ROUND_REWARDS.tickets;
                             totalRewards.hammers += ROUND_REWARDS.hammers;
                             totalRewards.gems += ROUND_REWARDS.gems;
-                        }
-                        round++;
-                        stage = 1;
-
-                        if (round > 4) {
+                            round++;
+                            stage = 1;
+                        } else if (round === 4) {
+                            isRound4Complete = true;
                             currentRoundPointsLocal += eggsOpened;
                             eggsOpened = 0;
                         }
@@ -262,17 +268,18 @@ const EggCalculator: React.FC = () => {
                         stage++;
                     }
                 }
+
+                if (isRound4Complete) {
+                    currentRoundPointsLocal += eggsOpened;
+                }
             }
 
-            // Apply maximum value constraints and handle points > 15999
-            if (finalTotalPoints >= 16000) {
+            // Handle points after round 4 completion
+            if (finalTotalPoints >= 16000 || isRound4Complete) {
                 round = 4;
                 stage = 5;
-                currentRoundPointsLocal = 4000;
-            } else {
-                round = Math.min(round, 4);
-                stage = Math.min(stage, 5);
                 currentRoundPointsLocal = Math.min(currentRoundPointsLocal, 4000);
+                finalTotalPoints = Math.max(finalTotalPoints, 16000);
             }
 
             return {
